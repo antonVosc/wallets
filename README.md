@@ -16,8 +16,9 @@ REST API для управления кошельками пользовател
 ## Быстрый старт
 
 ```bash
-pip3 install -r requirements.txt
+pip install -r requirements.txt
 ```
+в env
 
 ```bash
 docker compose build --no-cache
