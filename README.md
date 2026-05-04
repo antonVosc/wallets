@@ -36,8 +36,8 @@ docker run --rm \
   -e PYTHONPATH=/app \
   -e DATABASE_URL=postgresql+asyncpg://wallet:wallet@db:5432/wallet_test \
   -e DATABASE_URL_SYNC=postgresql://wallet:wallet@db:5432/wallet_test \
-  --network task_default \
-  task-api \
+  --network wallets_default \
+  wallets-api \
   python -m pytest /app/tests/ -v
 ```
 
