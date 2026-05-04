@@ -17,40 +17,36 @@ TEST_DATABASE_URL = (
     "postgresql+asyncpg://wallet:wallet@db:5432/wallet_test"
 )
 
-test_engine = create_async_engine(
-    TEST_DATABASE_URL,
-    echo=False,
-    pool_pre_ping=True,
-)
 
-TestSessionLocal = sessionmaker(
-    bind=test_engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-)
+def make_engine():
+    return create_async_engine(
+        TEST_DATABASE_URL,
+        echo=False,
+        pool_pre_ping=True,
+    )
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest_asyncio.fixture(scope="session", autouse=True)
-async def setup_database():
-    async with test_engine.begin() as conn:
+@pytest_asyncio.fixture(scope="function")
+async def db_engine():
+    engine = make_engine()
+    async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    yield
-    async with test_engine.begin() as conn:
+    yield engine
+    async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
 
 
 @pytest_asyncio.fixture
-async def client() -> AsyncGenerator:
-    # Each request gets its own session - critical for concurrency tests
+async def client(db_engine) -> AsyncGenerator:
+    session_factory = sessionmaker(
+        bind=db_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
     async def override_get_db():
-        async with TestSessionLocal() as session:
+        async with session_factory() as session:
             try:
                 yield session
             finally:
@@ -66,9 +62,13 @@ async def client() -> AsyncGenerator:
 
 
 @pytest_asyncio.fixture
-async def wallet(client: AsyncClient) -> dict:
-    """Create a wallet with initial balance via direct DB insert."""
-    async with TestSessionLocal() as session:
+async def wallet(db_engine, client: AsyncClient) -> Wallet:
+    session_factory = sessionmaker(
+        bind=db_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+    async with session_factory() as session:
         w = Wallet(id=uuid.uuid4(), balance=Decimal("1000.00"))
         session.add(w)
         await session.commit()
